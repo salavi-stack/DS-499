@@ -1,21 +1,17 @@
-# ============================================================
+
 # DS-499 — Gender Gaps in Internet Access and Economic Outcomes
-#
 # BUILDING THE DATASET
 # This script downloads the raw data from the World Bank and the
 # UN.
-# ============================================================
+
  
 library(WDI)        
 library(tidyverse)
  
 # Creating a folder to save the finished files into
 if (!dir.exists("research")) dir.create("research")
- 
- 
-# ============================================================
+
 # DOWNLOADING THE RAW DATA FROM THE WORLD BANK
-# ============================================================
 # Each line below is one indicator. The name on the LEFT is what I
 # want the column called; the code on the RIGHT is the World Bank's
 # official indicator code.
@@ -44,9 +40,7 @@ wb_raw <- WDI(country   = "all",
 cat("Downloaded", nrow(wb_raw), "rows\n")   # expect 2650
  
  
-# ============================================================
 # NARROWING TO DEVELOPING COUNTRIES
-# ============================================================
 # The World Bank labels every country by income group. "Developing"
 # here = low, lower-middle, and upper-middle income.
  
@@ -54,9 +48,8 @@ panel <- wb_raw %>%
   filter(region != "Aggregates",
          income %in% c("Low income", "Lower middle income", "Upper middle income")) %>%
  
-# ============================================================
+
 # CALCULATING THE GENDER GAP (my independent variable)
-# ============================================================
   # gap_diff  = how many percentage points ahead men are (my main measure)
   # gap_ratio = women's rate divided by men's; 1.0 means parity (backup measure)
   mutate(gap_diff  = internet_male - internet_female,
@@ -88,17 +81,12 @@ gii <- hdr %>%
  
 panel <- left_join(panel, gii, by = c("iso3", "year"))
  
- 
-# ============================================================
 # SAVING THE PANEL FILE (every country, every year)
-# ============================================================
 write_csv(panel, "research/gender_gap_panel_2015_2024.csv")
 cat("Panel file saved:", nrow(panel), "rows\n")
  
- 
-# ============================================================
+
 # BUILDING THE CROSS-SECTION (one row per country)
-# ============================================================
 # THE PROBLEM: countries run their internet surveys in different
 # years, so no single year has enough countries (the best year has
 # only 44). THE SOLUTION: using each country's most recent year
