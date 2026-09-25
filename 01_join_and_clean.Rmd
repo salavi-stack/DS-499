@@ -1,0 +1,327 @@
+---
+title: "Building My Analysis Dataset"
+subtitle: "Gender Gaps in Internet Access and Economic Outcomes"
+author: "Shukria Alavi"
+date: "`r format(Sys.Date(), '%B %d, %Y')`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+library(tidyverse)
+```
+
+# My research question
+
+Does a smaller gender gap in internet access go together with better economic
+outcomes for women in developing countries?
+
+I look at three outcomes: GDP per capita, female labour force participation,
+and female secondary school enrollment.
+
+**What I want to know at this stage:**
+
+1. How big is the internet gender gap, and how much does it vary between
+   countries?
+2. Do I have enough complete data to compare it against my three outcomes?
+
+
+
+# Step 1: Load the three datasets
+
+```{r load}
+internet  <- read_csv("data_raw/source1_internet_gender_findex.csv",
+                      show_col_types = FALSE)
+outcomes  <- read_csv("data_raw/source2_outcomes_worldbank.csv",
+                      show_col_types = FALSE)
+inequality <- read_csv("data_raw/source3_gii_undp.csv",
+                       show_col_types = FALSE)
+```
+
+## Dataset 1: Internet use by gender
+
+**Source:** World Bank Global Findex 2025. Gallup surveyed adults aged 15 and
+over in each country between May and December 2024 and asked whether they use
+the internet. Every country was surveyed in the same year with the same
+question, which is why I use this as my main measure.
+
+The published file is 8,577 rows by 438 columns covering six survey years and
+every breakdown. `00_download_sources.R` narrows it to 2024, the gender
+breakdown, and the internet question, and converts the values from proportions
+to percentages.
+
+This gives me my independent variable.
+
+```{r look1}
+dim(internet)
+names(internet)
+head(internet, 3)
+```
+
+## Dataset 2: Economic and education outcomes
+
+**Source:** World Bank World Development Indicators. This gives me my three
+outcome variables plus two control variables. For each country I took the most
+recent value between 2021 and 2024, and kept a column recording which year it
+came from.
+
+```{r look2}
+dim(outcomes)
+names(outcomes)
+head(outcomes, 3)
+```
+
+## Dataset 3: Gender Inequality Index
+
+**Source:** UNDP Human Development Report 2025. The Gender Inequality Index
+combines maternal mortality, adolescent births, seats in parliament, education
+and labour force participation into one score from 0 to 1, where higher means
+more unequal. I use it as a control.
+
+```{r look3}
+dim(inequality)
+names(inequality)
+head(inequality, 3)
+```
+
+
+# Step 2: Checking the datasets before joining
+
+If the column I join on does not match across files, countries disappear
+without any error message. So I check first.
+
+*Does any country appear twice?*
+
+```{r check-dup}
+sum(duplicated(internet$country_code))
+sum(duplicated(outcomes$country_code))
+sum(duplicated(inequality$country_code))
+```
+
+All zero, so each country appears once in each file.
+
+**Which countries are in one file but not another?**
+
+`anti_join` shows rows on the left with no match on the right.
+
+```{r check-anti}
+anti_join(internet, outcomes, by = "country_code") %>%
+  select(country_code, country_name)
+
+anti_join(internet, inequality, by = "country_code") %>%
+  select(country_code, country_name)
+```
+
+Every country in my internet data is also in the World Bank file. Three are
+missing from the UNDP file, so they will have no Gender Inequality Index.
+
+**Are country names spelled the same way?**
+
+```{r check-names}
+name_check <- internet %>%
+  select(country_code, name_worldbank = country_name) %>%
+  inner_join(inequality %>% select(country_code, name_undp = country_name),
+             by = "country_code")
+
+name_check %>% filter(name_worldbank != name_undp)
+```
+
+```{r count-names}
+name_check %>%
+  summarise(total = n(),
+            same_spelling      = sum(name_worldbank == name_undp),
+            different_spelling = sum(name_worldbank != name_undp))
+```
+
+**This is the most important check on the page.** 14 countries are spelled
+differently between the two organisations. The World Bank writes
+"Egypt, Arab Rep." where the UNDP writes "Egypt", and "Kyrgyz Republic" where
+the UNDP writes "Kyrgyzstan".
+
+If I had joined on country name, those 14 countries would have silently
+dropped out and I would never have known. This is why I join on the
+three-letter **country code**, which is standardised across organisations.
+
+
+# Step 3: Joining
+
+`left_join` keeps every row on the left and adds matching columns from the
+right. Where there is no match it fills in `NA` instead of dropping the row.
+
+I start from the internet data, because a country with no gender gap measure
+is no use to me.
+
+```{r join}
+data <- internet %>%
+  left_join(outcomes,   by = "country_code") %>%
+  left_join(inequality, by = "country_code")
+
+dim(data)
+```
+
+The join added **columns**, not rows.
+
+```{r join-check}
+nrow(internet)                    # before
+nrow(data)                        # after
+sum(duplicated(data$country_code))  # should be 0
+```
+
+The join brought in three copies of the country name, one per file. I keep one.
+
+```{r tidy-names}
+data <- data %>%
+  select(-country_name.y, -country_name) %>%
+  rename(country = country_name.x)
+```
+
+
+# Step 4: Cleaning
+
+Each decision below says what I did and why.
+
+**Build the gender gap variable**
+
+The gap is not in any dataset. I calculate it from the male and female columns.
+
+```{r make-gap}
+data <- data %>%
+  mutate(
+    gap_diff  = internet_men - internet_women,   # percentage points; + means men ahead
+    gap_ratio = internet_women / internet_men    # 1.0 means equal
+  )
+```
+
+**Droping Kosovo**
+
+Kosovo is missing female labour force participation, overall internet use, and
+the Gender Inequality Index. That is most of what I need. R would exclude it
+from nearly every model anyway, so removing it on purpose keeps my stated
+sample size honest.
+
+```{r drop-kosovo}
+data <- data %>% filter(country != "Kosovo")
+nrow(data)
+```
+
+**Add a logged GDP column**
+
+GDP per capita is skewed, with a few countries much richer than the rest.
+Taking the log evens it out, which is standard before using it in a model.
+
+```{r log-gdp}
+data <- data %>% mutate(log_gdp = log(gdp_pc_ppp))
+```
+
+**Keep the columns I actually use**
+
+```{r select-cols}
+data <- data %>%
+  select(country_code, country,
+         internet_women, internet_men, gap_diff, gap_ratio,
+         gdp_pc_ppp, log_gdp, flfp, sec_enroll_fem_gross,
+         internet_total, urban_pct, gender_inequality_index)
+
+dim(data)
+names(data)
+```
+
+**What I did NOT do**
+
+- I did not remove outliers. Pakistan has the widest gap and the data is
+  correct, so it stays.
+- I did not fill in missing values. I report them instead.
+
+
+# Step 5: Check the cleaned data
+
+```{r check-final}
+nrow(data)
+sum(duplicated(data$country_code))
+```
+
+```{r check-missing}
+data %>%
+  summarise(across(c(gap_diff, gdp_pc_ppp, flfp, sec_enroll_fem_gross,
+                     internet_total, urban_pct, gender_inequality_index),
+                   ~ sum(is.na(.)))) %>%
+  pivot_longer(everything(), names_to = "variable", values_to = "missing") %>%
+  arrange(desc(missing))
+```
+
+
+
+
+# Step 6: Look at each variable on its own
+
+**The internet gender gap**
+
+```{r gap}
+summary(data$gap_diff)
+
+ggplot(data, aes(x = gap_diff)) +
+  geom_histogram(bins = 20, fill = "steelblue", colour = "white") +
+  geom_vline(xintercept = 0, linetype = "dashed") +
+  labs(title = "Internet gender gap",
+       x = "Male % minus female % (percentage points)",
+       y = "Number of countries")
+```
+
+```{r gap-extremes}
+data %>% arrange(desc(gap_diff)) %>%
+  select(country, internet_women, internet_men, gap_diff) %>% head(5)
+
+data %>% arrange(gap_diff) %>%
+  select(country, internet_women, internet_men, gap_diff) %>% head(5)
+```
+
+
+
+**GDP per capita**
+
+```{r gdp}
+summary(data$gdp_pc_ppp)
+
+ggplot(data, aes(x = gdp_pc_ppp)) +
+  geom_histogram(bins = 20, fill = "steelblue", colour = "white") +
+  labs(title = "GDP per capita", x = "PPP dollars", y = "Number of countries")
+```
+
+**Female labour force participation**
+
+```{r flfp}
+summary(data$flfp)
+
+ggplot(data, aes(x = flfp)) +
+  geom_histogram(bins = 20, fill = "steelblue", colour = "white") +
+  labs(title = "Female labour force participation",
+       x = "% of women aged 15+", y = "Number of countries")
+```
+
+**Female secondary enrollment**
+
+```{r enroll}
+summary(data$sec_enroll_fem_gross)
+
+ggplot(data, aes(x = sec_enroll_fem_gross)) +
+  geom_histogram(bins = 20, fill = "steelblue", colour = "white") +
+  labs(title = "Female secondary enrollment",
+       x = "% gross", y = "Number of countries")
+```
+
+
+# Step 7: Save
+
+```{r save}
+if (!dir.exists("data_clean")) dir.create("data_clean")
+write_csv(data, "data_clean/analysis_data.csv")
+```
+
+**Where I am**
+
+- I have **89 countries** with a gender gap measure and most outcomes.
+- The gap ranges from women being ahead by 8 points to men being ahead by 44.
+- 15 countries have no female secondary enrollment figure, which is my weakest
+  outcome variable.
+
+

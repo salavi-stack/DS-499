@@ -1,9 +1,0 @@
----
-title: "DS_499"
-author: Shukria Alavi
-output: 
-  html_document: 
-    theme: spacelab
-date: "2026-08-28"
----
-
