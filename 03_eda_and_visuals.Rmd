@@ -1,0 +1,371 @@
+---
+title: "Exploring the Data"
+subtitle: "Summary statistics, missing values, and visuals"
+author: "Shukria Alavi"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: true
+    toc_depth: 2
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+```
+
+This file sits between `01_join_and_clean.Rmd` and `02_analysis.Rmd`. It
+describes the data before any model is fitted: what the variables look like,
+what is missing, and what the patterns are.
+
+Every visual below states the question it is there to answer. A chart that
+does not answer a question does not belong in the paper.
+
+```{r load}
+# patchwork is only used for the final side-by-side figure.
+# install.packages("patchwork")   # run once in the console if needed
+library(tidyverse)
+library(patchwork)
+
+data <- read_csv("data_clean/analysis_data.csv", show_col_types = FALSE)
+dim(data)
+```
+
+
+# Part 1: Where the data comes from
+
+| Source | What I take from it | Coverage |
+|---|---|---|
+| World Bank **Global Findex 2025** | Internet use by women and by men. Gallup surveyed adults aged 15+ in each country between May and December 2024, same question everywhere. | My independent variable |
+| World Bank **World Development Indicators** | GDP per capita (PPP), female labour force participation, female secondary enrollment, overall internet use, urban share. Most recent value 2021–2024. | My three outcomes plus two controls |
+| UNDP **Human Development Report 2025** | Gender Inequality Index, 2023. Higher means more unequal. | An extra control |
+
+All three were downloaded and reduced by `00_download_sources.R` and joined on
+ISO-3 country code in `01_join_and_clean.Rmd`. Nothing was edited by hand at
+any point.
+
+
+
+# Part 2: Summary statistics
+
+```{r summary-table}
+summary_table <- data %>%
+  select(internet_women, internet_men, gap_diff, gap_ratio,
+         gdp_pc_ppp, flfp, sec_enroll_fem_gross,
+         internet_total, urban_pct, gender_inequality_index) %>%
+  pivot_longer(everything(), names_to = "variable", values_to = "value") %>%
+  group_by(variable) %>%
+  summarise(
+    n       = sum(!is.na(value)),
+    missing = sum(is.na(value)),
+    mean    = round(mean(value,   na.rm = TRUE), 2),
+    sd      = round(sd(value,     na.rm = TRUE), 2),
+    min     = round(min(value,    na.rm = TRUE), 2),
+    median  = round(median(value, na.rm = TRUE), 2),
+    max     = round(max(value,    na.rm = TRUE), 2),
+    .groups = "drop"
+  ) %>%
+  mutate(variable = factor(variable, levels = c(
+    "internet_women", "internet_men", "gap_diff", "gap_ratio",
+    "gdp_pc_ppp", "flfp", "sec_enroll_fem_gross",
+    "internet_total", "urban_pct", "gender_inequality_index"))) %>%
+  arrange(variable)
+
+knitr::kable(summary_table)
+```
+
+
+
+# Part 3: What is missing
+
+```{r missing-count}
+data %>%
+  summarise(across(everything(), ~ sum(is.na(.)))) %>%
+  pivot_longer(everything(), names_to = "variable", values_to = "missing") %>%
+  filter(missing > 0) %>%
+  arrange(desc(missing))
+```
+
+Which countries, specifically:
+
+```{r missing-who}
+data %>%
+  select(country, gdp_pc_ppp, sec_enroll_fem_gross, gender_inequality_index) %>%
+  pivot_longer(-country, names_to = "variable", values_to = "value") %>%
+  filter(is.na(value)) %>%
+  group_by(variable) %>%
+  summarise(n_missing = n(),
+            countries = paste(sort(country), collapse = ", "),
+            .groups = "drop")
+```
+
+Three things to say about this:
+
+- Female secondary enrollment is my weakest variable. 15 of 89 countries have
+  no figure, which drops my enrollment models to n = 74.
+- The missingness is not random. The countries without an enrollment figure
+  are mostly lower-income, which means the enrollment results describe a
+  slightly better-off subset of my sample.
+- I did not impute anything. Every model simply uses the countries that have
+  the variables it needs, and I report the n for each one.
+
+
+
+# Part 4: The visuals
+
+I add world region here so I can look at the gap geographically. Region is not
+in the analysis file, so I attach it from the World Bank's classification.
+
+```{r regions}
+region_lookup <- c(
+  # Europe & Central Asia
+  ALB="Europe & Central Asia", ARM="Europe & Central Asia",
+  AZE="Europe & Central Asia", BIH="Europe & Central Asia",
+  GEO="Europe & Central Asia", KAZ="Europe & Central Asia",
+  KGZ="Europe & Central Asia", MDA="Europe & Central Asia",
+  MNE="Europe & Central Asia", MKD="Europe & Central Asia",
+  SRB="Europe & Central Asia", TJK="Europe & Central Asia",
+  TUR="Europe & Central Asia", UKR="Europe & Central Asia",
+  UZB="Europe & Central Asia",
+  # Middle East & North Africa
+  DZA="Middle East & North Africa", EGY="Middle East & North Africa",
+  IRN="Middle East & North Africa", IRQ="Middle East & North Africa",
+  JOR="Middle East & North Africa", LBN="Middle East & North Africa",
+  LBY="Middle East & North Africa", MAR="Middle East & North Africa",
+  TUN="Middle East & North Africa", PSE="Middle East & North Africa",
+  # Latin America & Caribbean
+  ARG="Latin America & Caribbean", BLZ="Latin America & Caribbean",
+  BOL="Latin America & Caribbean", BRA="Latin America & Caribbean",
+  COL="Latin America & Caribbean", DOM="Latin America & Caribbean",
+  ECU="Latin America & Caribbean", SLV="Latin America & Caribbean",
+  GTM="Latin America & Caribbean", HND="Latin America & Caribbean",
+  MEX="Latin America & Caribbean", NIC="Latin America & Caribbean",
+  PRY="Latin America & Caribbean", PER="Latin America & Caribbean",
+  VEN="Latin America & Caribbean",
+  # South Asia
+  BGD="South Asia", IND="South Asia", LKA="South Asia",
+  NPL="South Asia", PAK="South Asia",
+  # East Asia & Pacific
+  KHM="East Asia & Pacific", CHN="East Asia & Pacific",
+  IDN="East Asia & Pacific", LAO="East Asia & Pacific",
+  MYS="East Asia & Pacific", MNG="East Asia & Pacific",
+  PHL="East Asia & Pacific", THA="East Asia & Pacific",
+  VNM="East Asia & Pacific",
+  # Sub-Saharan Africa
+  BEN="Sub-Saharan Africa", BWA="Sub-Saharan Africa",
+  BFA="Sub-Saharan Africa", CMR="Sub-Saharan Africa",
+  TCD="Sub-Saharan Africa", COM="Sub-Saharan Africa",
+  COD="Sub-Saharan Africa", COG="Sub-Saharan Africa",
+  CIV="Sub-Saharan Africa", SWZ="Sub-Saharan Africa",
+  ETH="Sub-Saharan Africa", GAB="Sub-Saharan Africa",
+  GMB="Sub-Saharan Africa", GHA="Sub-Saharan Africa",
+  GIN="Sub-Saharan Africa", KEN="Sub-Saharan Africa",
+  LSO="Sub-Saharan Africa", LBR="Sub-Saharan Africa",
+  MDG="Sub-Saharan Africa", MWI="Sub-Saharan Africa",
+  MLI="Sub-Saharan Africa", MRT="Sub-Saharan Africa",
+  MUS="Sub-Saharan Africa", MOZ="Sub-Saharan Africa",
+  NAM="Sub-Saharan Africa", NER="Sub-Saharan Africa",
+  NGA="Sub-Saharan Africa", SEN="Sub-Saharan Africa",
+  SLE="Sub-Saharan Africa", ZAF="Sub-Saharan Africa",
+  TZA="Sub-Saharan Africa", TGO="Sub-Saharan Africa",
+  UGA="Sub-Saharan Africa", ZMB="Sub-Saharan Africa",
+  ZWE="Sub-Saharan Africa"
+)
+
+data <- data %>% mutate(region = unname(region_lookup[country_code]))
+
+# every country should have a region
+sum(is.na(data$region))
+count(data, region)
+```
+
+
+## Visual 1: How big is the gap?
+
+**The question:** how wide is the internet gender gap, and how much do
+countries differ?
+
+```{r fig-gap-hist, fig.width = 7, fig.height = 4}
+fig1 <- ggplot(data, aes(x = gap_diff)) +
+  geom_histogram(bins = 20, fill = "steelblue", colour = "white") +
+  geom_vline(xintercept = 0, linetype = "dashed") +
+  labs(title = "Most countries have a gap, but a few are extreme",
+       subtitle = "Positive values mean men are further online than women",
+       x = "Internet gender gap (percentage points)",
+       y = "Number of countries") +
+  theme_minimal()
+
+fig1
+```
+
+
+
+## Visual 2: Which countries are at the extremes?
+
+**The question:** where is the gap widest, and where are women actually ahead?
+
+```{r fig-extremes, fig.width = 7, fig.height = 5}
+extremes <- bind_rows(
+  data %>% slice_max(gap_diff, n = 10),
+  data %>% slice_min(gap_diff, n = 5)
+) %>%
+  mutate(side = if_else(gap_diff > 0, "Men ahead", "Women ahead"))
+
+fig2 <- ggplot(extremes, aes(x = reorder(country, gap_diff), y = gap_diff,
+                             fill = side)) +
+  geom_col() +
+  coord_flip() +
+  scale_fill_manual(values = c("Men ahead" = "steelblue",
+                               "Women ahead" = "darkorange")) +
+  labs(title = "The ten widest gaps, and the five where women lead",
+       x = NULL,
+       y = "Internet gender gap (percentage points)",
+       fill = NULL) +
+  theme_minimal()
+
+fig2
+```
+
+Pakistan is an enormous outlier at 43.6 points.
+
+
+## Visual 3: Is the gap worse where fewer people are online?
+
+**The question:** does the gap shrink as a country gets more connected
+overall? This matters because it is the reason I control for total internet
+use later.
+
+```{r fig-45, fig.width = 6.5, fig.height = 5.5}
+fig3 <- ggplot(data, aes(x = internet_men, y = internet_women)) +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed",
+              colour = "grey40") +
+  geom_point(aes(colour = region), alpha = 0.85, size = 2) +
+  # Dark2 is colour-blind friendly, unlike ggplot's default palette
+  scale_colour_brewer(palette = "Dark2") +
+  labs(title = "Women's internet use against men's",
+       subtitle = "Dashed line is equality. Below it, men are further online.",
+       x = "Men online (%)", y = "Women online (%)", colour = NULL) +
+  coord_equal() +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+
+fig3
+```
+
+
+
+
+## Visual 4: Where is the gap concentrated?
+
+**The question:** is the gap a regional phenomenon or spread evenly?
+
+```{r fig-region, fig.width = 7.5, fig.height = 4.5}
+fig4 <- data %>%
+  mutate(region = fct_reorder(region, gap_diff, .fun = median)) %>%
+  ggplot(aes(x = region, y = gap_diff)) +
+  geom_hline(yintercept = 0, linetype = "dashed", colour = "grey50") +
+  geom_boxplot(fill = "steelblue", alpha = 0.6, outlier.shape = NA) +
+  geom_jitter(width = 0.15, alpha = 0.5, size = 1.5) +
+  coord_flip() +
+  labs(title = "The gap by world region",
+       subtitle = "Boxes show the middle half of countries; points are countries",
+       x = NULL, y = "Internet gender gap (percentage points)") +
+  theme_minimal()
+
+fig4
+```
+
+
+## Visual 5: The gap against each outcome
+
+**The question:** before any controls, does the gap look related to my three
+outcomes?
+
+```{r fig-outcomes, fig.width = 9, fig.height = 3.6}
+outcome_long <- data %>%
+  select(country, gap_diff, log_gdp, flfp, sec_enroll_fem_gross) %>%
+  pivot_longer(c(log_gdp, flfp, sec_enroll_fem_gross),
+               names_to = "outcome", values_to = "value") %>%
+  mutate(outcome = recode(outcome,
+    log_gdp              = "Logged GDP per capita",
+    flfp                 = "Female labour force participation (%)",
+    sec_enroll_fem_gross = "Female secondary enrollment (%)"))
+
+fig5 <- ggplot(outcome_long, aes(x = gap_diff, y = value)) +
+  geom_point(alpha = 0.55) +
+  geom_smooth(method = "lm", se = FALSE, colour = "steelblue") +
+  facet_wrap(~ outcome, scales = "free_y") +
+  labs(title = "Two slopes, and one flat line",
+       x = "Internet gender gap (percentage points)", y = NULL) +
+  theme_minimal()
+
+fig5
+```
+
+GDP and enrollment slope down.
+Female labour force participation is flat.
+
+
+## Visual 6: The final figure
+
+**The question:** what does the relationship between the gap and female labour
+force participation look like once I hold overall internet use and
+urbanisation constant?
+
+A plain scatter of the two shows nothing. The added variable plot removes the
+part of each variable that the controls already explain, and shows what is
+left — which is the relationship the regression actually estimates.
+
+```{r fig-final, fig.width = 10, fig.height = 4.4}
+# none of these four columns has a missing value, so the residuals line up
+# with all 89 rows of the data frame
+plot_data <- data
+plot_data$flfp_resid <- residuals(lm(flfp ~ internet_total + urban_pct,
+                                     data = data))
+plot_data$gap_resid  <- residuals(lm(gap_diff ~ internet_total + urban_pct,
+                                     data = data))
+
+panel_raw <- ggplot(plot_data, aes(gap_diff, flfp)) +
+  geom_point(alpha = 0.6) +
+  geom_smooth(method = "lm", se = FALSE, colour = "grey45") +
+  labs(title = "Raw",
+       subtitle = "No visible relationship (r = -0.05)",
+       x = "Internet gender gap (percentage points)",
+       y = "Female labour force participation (%)") +
+  theme_minimal()
+
+panel_adj <- ggplot(plot_data, aes(gap_resid, flfp_resid)) +
+  geom_point(alpha = 0.6) +
+  geom_smooth(method = "lm", se = FALSE, colour = "steelblue") +
+  labs(title = "Holding internet use and urbanisation constant",
+       subtitle = "-0.65 points of participation per point of gap (p = 0.004)",
+       x = "Internet gender gap (residual)",
+       y = "Female participation (residual)") +
+  theme_minimal()
+
+fig6 <- panel_raw + panel_adj
+fig6
+```
+
+
+
+# Part 5: Save the figures
+
+```{r save-figs}
+if (!dir.exists("figures")) dir.create("figures")
+
+ggsave("figures/fig1_gap_distribution.png", fig1, width = 7,  height = 4,   dpi = 300)
+ggsave("figures/fig2_extremes.png",         fig2, width = 7,  height = 5,   dpi = 300)
+ggsave("figures/fig3_women_vs_men.png",     fig3, width = 6.5,height = 5.5, dpi = 300)
+ggsave("figures/fig4_by_region.png",        fig4, width = 7.5,height = 4.5, dpi = 300)
+ggsave("figures/fig5_gap_vs_outcomes.png",  fig5, width = 9,  height = 3.6, dpi = 300)
+ggsave("figures/fig6_final.png",            fig6, width = 10, height = 4.4, dpi = 300)
+
+list.files("figures")
+```
+
+Also save the summary table, so the paper and the code never disagree.
+
+```{r save-table}
+if (!dir.exists("results")) dir.create("results")
+write_csv(summary_table, "results/summary_statistics.csv")
+```

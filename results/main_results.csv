@@ -1,0 +1,7 @@
+model,term,estimate,std_error,p_value,n
+log GDP per capita - no controls,gap_diff,-0.039,0.01,1e-4,88
+log GDP per capita - with controls,gap_diff,0.005,0.006,0.3681,88
+Female labour force part. - no controls,gap_diff,-0.094,0.212,0.66,89
+Female labour force part. - with controls,gap_diff,-0.653,0.22,0.0039,89
+Female enrollment - no controls,gap_diff,-1.207,0.301,1e-4,74
+Female enrollment - with controls,gap_diff,-0.162,0.25,0.5204,74
