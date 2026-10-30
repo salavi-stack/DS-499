@@ -141,10 +141,6 @@ right tail — a few very large values pulling the average up. `gap_ratio` passi
 
 # Part 3: What is missing
 
-**What this does.** `across(everything(), ~ sum(is.na(.)))` counts missing values
-in every column at once, then `pivot_longer` turns that one wide row into a
-readable list and `filter(missing > 0)` drops the columns that are complete.
-
 ```{r missing-count}
 data %>%
   summarise(across(everything(), ~ sum(is.na(.)))) %>%
@@ -409,7 +405,7 @@ use and urbanisation?
 
 A plain scatter of the two shows nothing, because two opposing effects cancel.
 The added variable plot removes the part of each variable that the controls
-already explain and shows what is left — which is the relationship the
+already explain and shows what is left, which is the relationship the
 regression actually estimates.
 
 **How to read the code.** `lm(flfp ~ internet_total + urban_pct)` predicts
