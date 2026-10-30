@@ -20,9 +20,16 @@ what is missing, and what the patterns are.
 Every visual below states the question it is there to answer. A chart that
 does not answer a question does not belong in the paper.
 
+**Loading everything.** I load the tidyverse for data handling and plotting, and
+`patchwork`, which is used once at the very end to place two finished plots side
+by side. The data comes from `data_clean/analysis_data.csv`, the single file
+produced by `01_join_and_clean.Rmd`. Printing `dim()` is a habit: if this does
+not say 89 rows and 13 columns, something upstream has changed and I should stop
+and find out why before going any further.
+
 ```{r load}
 # patchwork is only used for the final side-by-side figure.
-# install.packages("patchwork")   # run once in the console if needed
+# install.packages("patchwork")
 library(tidyverse)
 library(patchwork)
 
@@ -33,15 +40,68 @@ dim(data)
 
 # Part 1: Where the data comes from
 
-| Source | What I take from it | Coverage |
-|---|---|---|
-| World Bank **Global Findex 2025** | Internet use by women and by men. Gallup surveyed adults aged 15+ in each country between May and December 2024, same question everywhere. | My independent variable |
-| World Bank **World Development Indicators** | GDP per capita (PPP), female labour force participation, female secondary enrollment, overall internet use, urban share. Most recent value 2021–2024. | My three outcomes plus two controls |
-| UNDP **Human Development Report 2025** | Gender Inequality Index, 2023. Higher means more unequal. | An extra control |
+All three sources were downloaded directly from the organisation that publishes
+them, by `00_download_sources.R`, and joined on ISO-3 country code in
+`01_join_and_clean.Rmd`. None came from a data aggregator or a pre-cleaned copy,
+and nothing was edited by hand at any stage.
 
-All three were downloaded and reduced by `00_download_sources.R` and joined on
-ISO-3 country code in `01_join_and_clean.Rmd`. Nothing was edited by hand at
-any point.
+## Source 1 — Internet use by gender
+
+**World Bank Global Findex Database 2025.** Gallup surveyed adults aged 15 and
+over in each country between May and December 2024, asking the same internet-use
+question everywhere.
+
+- Landing page: <https://www.worldbank.org/en/publication/globalfindex>
+- File used: <https://thedocs.worldbank.org/en/doc/be6615202d1f08a25855c8ac2d615122-0050012025/related/GlobalFindexDatabase2025.csv>
+- The published file is 8,577 rows by 438 columns, covering six survey years and
+  every breakdown. `00_download_sources.R` filters it to 2024, the gender
+  breakdown and the internet question, and converts proportions to percentages.
+- Gives me: `internet_women`, `internet_men`
+
+## Source 2 — Economic and education outcomes
+
+**World Bank World Development Indicators**, retrieved through the `WDI` R
+package, which queries the World Bank API by indicator code rather than
+downloading a file. For each country I take the most recent value between 2021
+and 2024, and keep a column recording which year it came from.
+
+- Landing page: <https://databank.worldbank.org/source/world-development-indicators>
+- R package: <https://cran.r-project.org/package=WDI>
+
+| Indicator code | What it measures | My column |
+|---|---|---|
+| `NY.GDP.PCAP.PP.KD` | GDP per capita, PPP, constant international dollars | `gdp_pc_ppp` |
+| `SL.TLF.CACT.FE.ZS` | Labour force participation rate, female, % of female population 15+ | `flfp` |
+| `SE.SEC.ENRR.FE` | School enrollment, secondary, female, % gross | `sec_enroll_fem_gross` |
+| `IT.NET.USER.ZS` | Individuals using the internet, % of population | `internet_total` |
+| `SP.URB.TOTL.IN.ZS` | Urban population, % of total | `urban_pct` |
+| `SP.POP.TOTL` | Used only to pull the region and income classification | — |
+
+## Source 3 — Gender Inequality Index
+
+**UNDP Human Development Report 2025**, composite indices complete time series.
+The GII combines maternal mortality, adolescent births, parliamentary seats,
+education and labour force participation into one score from 0 to 1, where
+higher means more unequal. I use the 2023 value as a control.
+
+- Landing page: <https://hdr.undp.org/data-center/documentation-and-downloads>
+- File used: <https://hdr.undp.org/sites/default/files/2025_HDR/HDR25_Composite_indices_complete_time_series.csv>
+- Gives me: `gender_inequality_index`
+
+## Which countries count as developing
+
+The sample is defined by the **World Bank income classification** - low,
+lower-middle and upper-middle income - with aggregate rows such as "World" and
+"Sub-Saharan Africa" excluded. This is pulled in `00_download_sources.R`
+alongside the indicators above, so the sample definition lives in code rather
+than being chosen by hand.
+
+**One measurement caveat worth stating up front.** `internet_total` comes from
+the World Bank, while `internet_women` and `internet_men` come from Global
+Findex. They are different surveys with different instruments and slightly
+different definitions of an internet user. I use the World Bank figure as my
+control for overall connectivity, which means it is not exactly the average of
+my two gendered figures. I return to this in the limitations.
 
 
 
@@ -73,9 +133,17 @@ summary_table <- data %>%
 knitr::kable(summary_table)
 ```
 
+**What to notice in the output.** The gap runs from −8.04 to +43.61 with a median
+of 4.79 and a mean of 6.06. Mean above median is the arithmetic signature of a
+right tail — a few very large values pulling the average up. `gap_ratio` passing
+1.0 marks the countries where women are ahead.
 
 
 # Part 3: What is missing
+
+**What this does.** `across(everything(), ~ sum(is.na(.)))` counts missing values
+in every column at once, then `pivot_longer` turns that one wide row into a
+readable list and `filter(missing > 0)` drops the columns that are complete.
 
 ```{r missing-count}
 data %>%
@@ -85,7 +153,9 @@ data %>%
   arrange(desc(missing))
 ```
 
-Which countries, specifically:
+**Counts are not enough.** Knowing that 15 countries lack an enrollment figure
+tells me the size of the problem; knowing *which* countries tells me whether it
+is likely to bias anything. So I name them.
 
 ```{r missing-who}
 data %>%
@@ -178,6 +248,9 @@ sum(is.na(data$region))
 count(data, region)
 ```
 
+Region is **descriptive only**. It appears in two plots below and in none of my
+models, so no coefficient anywhere in this project is adjusted for region.
+
 
 ## Visual 1: How big is the gap?
 
@@ -197,11 +270,20 @@ fig1 <- ggplot(data, aes(x = gap_diff)) +
 fig1
 ```
 
+Twenty-one of 89 countries sit left of the line. The tallest bar is just above
+zero, so the single most common situation is a near-equal gap. The right tail is
+long and thin: 30 countries above 10 points, only five above 20, and then nothing
+at all between 25 and 41 before Pakistan at 43.61, alone.
+
+*The number of bins is a judgement call. Twenty shows the right tail without
+breaking the distribution into noise.*
 
 
 ## Visual 2: Which countries are at the extremes?
 
 **The question:** where is the gap widest, and where are women actually ahead?
+
+A histogram can't carry names, so this is where they go.
 
 ```{r fig-extremes, fig.width = 7, fig.height = 5}
 extremes <- bind_rows(
@@ -224,8 +306,6 @@ fig2 <- ggplot(extremes, aes(x = reorder(country, gap_diff), y = gap_diff,
 
 fig2
 ```
-
-Pakistan is an enormous outlier at 43.6 points.
 
 
 ## Visual 3: Is the gap worse where fewer people are online?
@@ -251,12 +331,15 @@ fig3 <- ggplot(data, aes(x = internet_men, y = internet_women)) +
 fig3
 ```
 
-
-
+The points sit tight to the line in the top right and fan out below it toward
+the bottom left. The gap is widest exactly where overall connectivity is lowest.
+**This is the visual justification for controlling for `internet_total`** — a
+picture of a confound, which is easier to show than to describe.
 
 ## Visual 4: Where is the gap concentrated?
 
 **The question:** is the gap a regional phenomenon or spread evenly?
+
 
 ```{r fig-region, fig.width = 7.5, fig.height = 4.5}
 fig4 <- data %>%
@@ -274,11 +357,20 @@ fig4 <- data %>%
 fig4
 ```
 
+Median gaps: South Asia 15.2, Sub-Saharan Africa 11.3, Latin America 1.7, Middle
+East and North Africa 1.2, Europe and Central Asia 1.1, and East Asia and Pacific
+−1.4, where women are ahead on average. Every region has countries on both sides
+of zero, so this is a broad pattern with regional concentration rather than a
+South Asia story in disguise.
+
+I plot every country as a point as well as the box because with only five South
+Asian countries a boxplot alone would overstate how solid that median is.
 
 ## Visual 5: The gap against each outcome
 
 **The question:** before any controls, does the gap look related to my three
 outcomes?
+
 
 ```{r fig-outcomes, fig.width = 9, fig.height = 3.6}
 outcome_long <- data %>%
@@ -301,19 +393,31 @@ fig5 <- ggplot(outcome_long, aes(x = gap_diff, y = value)) +
 fig5
 ```
 
-GDP and enrollment slope down.
+This is the puzzle the analysis file solves. GDP and enrollment slope down.
 Female labour force participation is flat.
+
+Each panel's line is the bivariate model from `02_analysis.Rmd`: −0.039 for
+logged GDP, −0.094 for participation, −1.207 for enrollment.
+
 
 
 ## Visual 6: The final figure
 
 **The question:** what does the relationship between the gap and female labour
-force participation look like once I hold overall internet use and
-urbanisation constant?
+force participation look like among countries that are alike on overall internet
+use and urbanisation?
 
-A plain scatter of the two shows nothing. The added variable plot removes the
-part of each variable that the controls already explain, and shows what is
-left — which is the relationship the regression actually estimates.
+A plain scatter of the two shows nothing, because two opposing effects cancel.
+The added variable plot removes the part of each variable that the controls
+already explain and shows what is left — which is the relationship the
+regression actually estimates.
+
+**How to read the code.** `lm(flfp ~ internet_total + urban_pct)` predicts
+participation from the controls alone. `residuals()` returns what that prediction
+missed, how far above or below each country sits relative to where its
+connectivity and urbanisation alone would put it. The second line does the same
+to the gap. Plotting one against the other compares countries that have been put
+on a level footing. Everything after that is an ordinary scatter plot.
 
 ```{r fig-final, fig.width = 10, fig.height = 4.4}
 # none of these four columns has a missing value, so the residuals line up
@@ -327,7 +431,7 @@ plot_data$gap_resid  <- residuals(lm(gap_diff ~ internet_total + urban_pct,
 panel_raw <- ggplot(plot_data, aes(gap_diff, flfp)) +
   geom_point(alpha = 0.6) +
   geom_smooth(method = "lm", se = FALSE, colour = "grey45") +
-  labs(title = "Raw",
+  labs(title = "All 89 countries, unadjusted",
        subtitle = "No visible relationship (r = -0.05)",
        x = "Internet gender gap (percentage points)",
        y = "Female labour force participation (%)") +
@@ -336,7 +440,7 @@ panel_raw <- ggplot(plot_data, aes(gap_diff, flfp)) +
 panel_adj <- ggplot(plot_data, aes(gap_resid, flfp_resid)) +
   geom_point(alpha = 0.6) +
   geom_smooth(method = "lm", se = FALSE, colour = "steelblue") +
-  labs(title = "Holding internet use and urbanisation constant",
+  labs(title = "Among countries at similar internet use and urbanisation",
        subtitle = "-0.65 points of participation per point of gap (p = 0.004)",
        x = "Internet gender gap (residual)",
        y = "Female participation (residual)") +
@@ -344,6 +448,41 @@ panel_adj <- ggplot(plot_data, aes(gap_resid, flfp_resid)) +
 
 fig6 <- panel_raw + panel_adj
 fig6
+```
+
+Nothing is literally held constant here. All 89 countries keep their own
+internet penetration and their own urban share. What the code does is **remove**
+the part of each variable that the controls can predict, leaving residuals that
+are uncorrelated with internet use and urbanisation by construction. That is why
+the panel is titled as a comparison between similar countries rather than as
+something being fixed at a value.
+
+There are pairs in my own data where this comparison can be seen directly. Iraq
+and Paraguay differ by 0.1 of a percentage point in overall internet use and by
+0.03 in urban share — effectively identical on both controls — but their gaps are
+23 points apart, and Iraq's female participation is far lower. Such matched pairs
+are rare, which is exactly why the comparison has to be made by a regression
+across all 89 countries rather than by eye.
+
+## Checking that the figure is the model
+
+```{r line-check}
+m_bivariate <- lm(flfp ~ gap_diff, data = data)
+m_full      <- lm(flfp ~ gap_diff + internet_total + urban_pct, data = data)
+
+flfp_r <- residuals(lm(flfp     ~ internet_total + urban_pct, data = data))
+gap_r  <- residuals(lm(gap_diff ~ internet_total + urban_pct, data = data))
+m_av   <- lm(flfp_r ~ gap_r)
+
+tibble(
+  panel           = c("Left: unadjusted", "Right: adjusted"),
+  slope_in_figure = c(coef(m_bivariate)["gap_diff"], coef(m_av)["gap_r"]),
+  coef_in_model   = c(coef(m_bivariate)["gap_diff"], coef(m_full)["gap_diff"])
+) %>%
+  mutate(across(where(is.numeric), ~ round(.x, 5)))
+
+# exactly equal, not approximately
+all.equal(unname(coef(m_full)["gap_diff"]), unname(coef(m_av)["gap_r"]))
 ```
 
 
@@ -363,7 +502,7 @@ ggsave("figures/fig6_final.png",            fig6, width = 10, height = 4.4, dpi 
 list.files("figures")
 ```
 
-Also save the summary table, so the paper and the code never disagree.
+**And the summary table.** 
 
 ```{r save-table}
 if (!dir.exists("results")) dir.create("results")
