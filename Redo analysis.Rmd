@@ -1,0 +1,147 @@
+---
+title: "The Internet Gender Gap and Women's Economic Outcomes"
+subtitle: "DS-499 Capstone"
+author: "Shukria Alavi"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: true
+    toc_depth: 2
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+```
+
+# Why I wanted to look at this
+
+The biggest reason I wanted to study the internet gender gap is my personal connection to Afghanistan, where schools are completely banned for girls and the internet is the only hope they have to continue their education and bring some change to their lives. Since the day I left Afghanistan, I have always been in search of a way to help Afghan girls through online education. I am hoping these results show that the internet can change people’s lives, and women’s especially.
+       
+
+
+
+# My question
+
+Does a smaller gender gap in internet access go together with better economic
+outcomes for women in developing countries?
+
+I look at three outcomes:
+
+- **GDP per capita** — how well off the country is overall
+- **Female labour force participation** — the share of women aged 15 and over
+  who are working or looking for work
+- **Female secondary school enrollment** — how many girls are in secondary school
+
+Everything below is a comparison between countries at one point in time. I
+cannot say anything about cause and effect, and I do not try to.
+
+
+# Loading the data
+
+```{r load}
+library(tidyverse)
+
+data <- read_csv("data_clean/analysis_data.csv", show_col_types = FALSE)
+
+dim(data)
+```
+
+89 countries, 13 columns. That matches what `01_join_and_clean.Rmd` produced.
+
+The main variable I built is `gap_diff` which is men's internet use minus women's for the share of the internet use, and the `gap_ratio` the percentage points which is the gap between the two percentage. A positive number means men are further online
+than women.
+```{r peek}
+data %>%
+  select(country, internet_women, internet_men, gap_diff, flfp) %>%
+  head(5)
+```
+Looking at the first row. Albania’s figures are 86.68 for women and 78.64 for men, and the gap_diff column reads −8.04.
+
+I can check that by hand. I defined the gap as men’s internet use minus women’s, so for Albania that is 78.64 minus 86.68, which comes to −8.04. That is exactly what the column says, so the calculation I wrote in 01_join_and_clean.Rmd is doing what I intended it to do.
+
+The minus sign is what telling the story. Because I subtracted women from men rather than the other way round, a negative number means women are the ones further online. In Albania almost 87 percent of women use the internet against about 79 percent of men, so women are ahead by just over eight percentage points. Four of these first five countries have a negative gap, which is not typical of my sample, these are simply the first five in alphabetical order, and I am not going to read anything into them.
+
+# Step 2: Basic summary statistics
+
+Before doing anything else I want to see the range of each variable, what a
+typical country looks like and how spread out they are.
+
+```{r summaries}
+summary(data$gap_diff)
+
+summary(data$gdp_pc_ppp)
+
+summary(data$flfp)
+
+summary(data$sec_enroll_fem_gross)
+```
+
+The gap runs from −8.04 to 43.61 percentage points, with a median of 4.79.
+The mean, 6.06, is higher than the median, which tells me a few very large
+values are pulling the average up.
+
+Female labour force participation runs from 11 percent to 83 percent, a huge
+spread for countries that are all classified as developing.
+
+
+# Step 3: Checking for missing values
+
+Some countries are missing some variables. I need to know how many before I fit
+any models, because R quietly drops incomplete rows and I do not want to
+discover later that a model used fewer countries than I thought.
+
+```{r missing}
+colSums(is.na(data))
+```
+
+Three variables have gaps: female secondary enrollment is missing for 15
+countries, the Gender Inequality Index for 2, and GDP per capita for 1.
+
+Enrollment is my weakest variable. Any model using it will have 74 countries
+instead of 89. 
+```{r missing-who}
+data %>%
+  filter(is.na(sec_enroll_fem_gross)) %>%
+  select(country)
+```
+
+This chunk tells me which countries have no female secondary enrollment figure, so I can judge whether losing them matters. Ten of the 15 sit below my sample’s median GDP per capita, but five do not, China, Gabon, Iraq, Libya and Tunisia.
+
+```{r}
+data %>%
+  filter(is.na(sec_enroll_fem_gross)) %>%
+  summarise(mean_gap = mean(gap_diff))
+```
+
+I am curious here to know how much missing this data will effect the result: 
+
+8.23 is the average gap among the 15 countries that have no enrollment figure.
+
+6.06 is the average gap among all 89 countries.
+
+8.23 is bigger than 6.06. So the missing countries have wider gaps than typical.
+Since I don't have the data for the secondary enrollment of these countries, it is not checkable for me so I will stop Assuming.
+
+
+# Step 4: Looking at the gap on its own
+
+My main variable is one number for each country, 89 numbers in total. That is too many to read one at a time, so I use a histogram to see them all at once.
+
+This histogram cuts the whole range of the gap into equal slices and counts how many countries fall into each one. The height of a bar is how many countries, not how big their gap is, so a tall bar means a lot of countries happen to have that size of gap.
+
+The dashed line sits at zero, where women and men are online at the same rate. Bars to the right of it are countries where men are ahead. Bars to the left are countries where women are ahead.
+
+```{r hist}
+ggplot(data, aes(x = gap_diff)) +
+  geom_histogram(bins = 20, fill = "steelblue", colour = "white") +
+  geom_vline(xintercept = 0, linetype = "dashed") +
+  labs(title = "Most countries have a gap, but a few are extreme",
+       x = "Internet gender gap (percentage points)",
+       y = "Number of countries") +
+  theme_minimal()
+```
+
+Most countries sit a little to the right of zero, so men are usually somewhat
+further online. The right side has a long thin tail. Twenty-one countries sit to
+the left of the line, meaning women are ahead.
+
