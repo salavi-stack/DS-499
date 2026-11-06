@@ -180,5 +180,5 @@ ggplot(data, aes(x = gap_diff, y = log_gdp)) +
 
 ```
 
-The line slopes down. Countries with wider internet gender gaps tend to be poorer. Something that I was hoping to be the case and the reason that I wanted to explore this data and doing this research. 
+The line slopes down. Countries with wider internet gender gaps tend to be poorer. Something that I was hoping to be the case and the reason that I wanted to explore this data and doing this research and here I get to the point that I cna go to the next level exploration. 
 
