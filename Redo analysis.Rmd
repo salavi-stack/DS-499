@@ -145,3 +145,40 @@ Most countries sit a little to the right of zero, so men are usually somewhat
 further online. The right side has a long thin tail. Twenty-one countries sit to
 the left of the line, meaning women are ahead.
 
+
+I want to know which countries are at the two ends, so I sort by the gap and
+look at the top and bottom.
+
+```{r extremes}
+data %>%
+  arrange(desc(gap_diff)) %>%
+  select(country, internet_women, internet_men, gap_diff) %>%
+  head(5)
+
+data %>%
+  arrange(gap_diff) %>%
+  select(country, internet_women, internet_men, gap_diff) %>%
+  head(5)
+```
+In this chunk I wanted to see the countries at the two ends. I sort the gap from largest to smallest and take the top five, then sort it the other way and take the top five again. Because 68 of my 89 countries have men ahead, the first five all turn out to be countries where men lead, and the second five are all countries where women lead.
+
+These figures show how deep some of the differences are. Pakistan’s gap is 43.6 points, nearly twice the next country, and that is worth remembering when I fit a straight line through this variable later.
+
+
+Before fitting any model I plot the gap against each outcome. A model will hand me a number whether or not there is anything really there, so I want to look at the data first.
+Each dot is one country: its internet gender gap on the horizontal axis, its GDP per capita on the vertical. I use logged GDP rather than raw dollars here. GDP per capita in my sample runs from about $1,500 to $36,000, and most countries sit near the bottom of that range, so on a raw scale a few rich countries stretch the axis and everyone else bunches into a corner.
+On this scale, 8 is about $3,000 a year, 9 is about $8,000, and 10 is about $22,000 — each step up the axis means roughly 2.7 times richer.
+
+```{r plot-gdp}
+ggplot(data, aes(x = gap_diff, y = log_gdp)) +
+  geom_point(alpha = 0.6) +
+  geom_smooth(method = "lm", se = FALSE, colour = "steelblue") +
+  labs(title = "Wider gaps are found in poorer countries",
+       x = "Internet gender gap (percentage points)",
+       y = "Logged GDP per capita") +
+  theme_minimal()
+
+```
+
+The line slopes down. Countries with wider internet gender gaps tend to be poorer. Something that I was hoping to be the case and the reason that I wanted to explore this data and doing this research. 
+
