@@ -36,6 +36,8 @@ Everything below is a comparison between countries at one point in time. I
 cannot say anything about cause and effect, and I do not try to.
 
 
+
+
 # Loading the data
 
 ```{r load}
@@ -48,8 +50,44 @@ dim(data)
 
 89 countries, 13 columns. That matches what `01_join_and_clean.Rmd` produced.
 
-The main variable I built is `gap_diff` which is men's internet use minus women's for the share of the internet use, and the `gap_ratio` the percentage points which is the gap between the two percentage. A positive number means men are further online
-than women.
+I built two measures of the gap. gap_diff is men's internet use minus women's, measured in percentage points — a positive number means men are further online. gap_ratio is women's use divided by men's, where 1.0 means equal and below 1.0 means women are behind. I use gap_diff as my main measure and keep the ratio as a second way of looking at the same thing.
+
+
+
+## What is in the dataset
+
+Before looking at any one variable I list all thirteen, what each one measures,
+and where it came from. Three of them I built myself; the rest were downloaded.
+
+```{r glimpse}
+glimpse(data)
+```
+
+| Variable | What it measures | Units | Where it came from |
+|---|---|---|---|
+| `country_code` | ISO-3 country code | three letters | used to join the three sources |
+| `country` | country name | text | Global Findex |
+| `internet_women` | share of women aged 15+ who use the internet | percent | Global Findex 2025 |
+| `internet_men` | share of men aged 15+ who use the internet | percent | Global Findex 2025 |
+| `gap_diff` | `internet_men` minus `internet_women` | percentage points | **I built this** |
+| `gap_ratio` | `internet_women` divided by `internet_men` | ratio, 1.0 = equal | **I built this** |
+| `gdp_pc_ppp` | GDP per capita, purchasing power parity, constant dollars | international dollars | World Bank WDI |
+| `log_gdp` | natural log of `gdp_pc_ppp` | logged dollars | **I built this** |
+| `flfp` | female labour force participation rate, women aged 15+ | percent | World Bank WDI |
+| `sec_enroll_fem_gross` | female secondary school enrollment, gross | percent | World Bank WDI |
+| `internet_total` | share of the whole population using the internet | percent | World Bank WDI |
+| `urban_pct` | urban population | percent of total | World Bank WDI |
+| `gender_inequality_index` | UNDP Gender Inequality Index, 2023 | 0 to 1, higher is more unequal | UNDP HDR 2025 |
+
+The three I built were all made with `mutate()` in `01_join_and_clean.Rmd`.
+Nothing else in this file was altered after download.
+
+One note on `sec_enroll_fem_gross`. "Gross" means the number of girls enrolled
+in secondary school divided by the number of girls of secondary school age, so
+it can go above 100 percent when students are older or younger than the usual
+age for their grade, or are repeating a year. My maximum is 116.87, which is why.
+
+
 ```{r peek}
 data %>%
   select(country, internet_women, internet_men, gap_diff, flfp) %>%
@@ -61,7 +99,7 @@ I can check that by hand. I defined the gap as men’s internet use minus women�
 
 The minus sign is what telling the story. Because I subtracted women from men rather than the other way round, a negative number means women are the ones further online. In Albania almost 87 percent of women use the internet against about 79 percent of men, so women are ahead by just over eight percentage points. Four of these first five countries have a negative gap, which is not typical of my sample, these are simply the first five in alphabetical order, and I am not going to read anything into them.
 
-# Step 2: Basic summary statistics
+# Basic summary statistics
 
 Before doing anything else I want to see the range of each variable, what a
 typical country looks like and how spread out they are.
@@ -84,7 +122,7 @@ Female labour force participation runs from 11 percent to 83 percent, a huge
 spread for countries that are all classified as developing.
 
 
-# Step 3: Checking for missing values
+# Checking for missing values
 
 Some countries are missing some variables. I need to know how many before I fit
 any models, because R quietly drops incomplete rows and I do not want to
@@ -122,63 +160,96 @@ I am curious here to know how much missing this data will effect the result:
 8.23 is bigger than 6.06. So the missing countries have wider gaps than typical.
 Since I don't have the data for the secondary enrollment of these countries, it is not checkable for me so I will stop Assuming.
 
+## Each variable on its own
 
-# Step 4: Looking at the gap on its own
+The summaries above give me numbers. A histogram shows me shape — whether a
+variable is bunched at one end, spread evenly, or has a long tail. I look at
+each one separately before putting any of them into a model.
 
-My main variable is one number for each country, 89 numbers in total. That is too many to read one at a time, so I use a histogram to see them all at once.
+### The internet variables
 
-This histogram cuts the whole range of the gap into equal slices and counts how many countries fall into each one. The height of a bar is how many countries, not how big their gap is, so a tall bar means a lot of countries happen to have that size of gap.
-
-The dashed line sits at zero, where women and men are online at the same rate. Bars to the right of it are countries where men are ahead. Bars to the left are countries where women are ahead.
-
-```{r hist}
-ggplot(data, aes(x = gap_diff)) +
+```{r hist-internet}
+ggplot(data, aes(x = internet_women)) +
   geom_histogram(bins = 20, fill = "steelblue", colour = "white") +
-  geom_vline(xintercept = 0, linetype = "dashed") +
-  labs(title = "Most countries have a gap, but a few are extreme",
-       x = "Internet gender gap (percentage points)",
-       y = "Number of countries") +
+  labs(title = "Women online", x = "Percent of women aged 15+", y = "Countries") +
+  theme_minimal()
+
+ggplot(data, aes(x = internet_men)) +
+  geom_histogram(bins = 20, fill = "steelblue", colour = "white") +
+  labs(title = "Men online", x = "Percent of men aged 15+", y = "Countries") +
+  theme_minimal()
+
+ggplot(data, aes(x = internet_total)) +
+  geom_histogram(bins = 20, fill = "steelblue", colour = "white") +
+  labs(title = "Everyone online", x = "Percent of population", y = "Countries") +
   theme_minimal()
 ```
 
-Most countries sit a little to the right of zero, so men are usually somewhat
-further online. The right side has a long thin tail. Twenty-one countries sit to
-the left of the line, meaning women are ahead.
+All three lean the same way: a tail stretching to the left, with more countries
+bunched at the high end. That makes sense, internet use has a ceiling at 100
+percent, and a lot of countries are near it.
 
+### The second gap measure
 
-I want to know which countries are at the two ends, so I sort by the gap and
-look at the top and bottom.
-
-```{r extremes}
-data %>%
-  arrange(desc(gap_diff)) %>%
-  select(country, internet_women, internet_men, gap_diff) %>%
-  head(5)
-
-data %>%
-  arrange(gap_diff) %>%
-  select(country, internet_women, internet_men, gap_diff) %>%
-  head(5)
+```{r hist-ratio}
+ggplot(data, aes(x = gap_ratio)) +
+  geom_histogram(bins = 20, fill = "steelblue", colour = "white") +
+  geom_vline(xintercept = 1, linetype = "dashed") +
+  labs(title = "Women's internet use as a share of men's",
+       x = "Women divided by men (1.0 = equal)", y = "Countries") +
+  theme_minimal()
 ```
-In this chunk I wanted to see the countries at the two ends. I sort the gap from largest to smallest and take the top five, then sort it the other way and take the top five again. Because 68 of my 89 countries have men ahead, the first five all turn out to be countries where men lead, and the second five are all countries where women lead.
 
-These figures show how deep some of the differences are. Pakistan’s gap is 43.6 points, nearly twice the next country, and that is worth remembering when I fit a straight line through this variable later.
+The dashed line is at 1.0, where women and men are equal. Most countries sit
+just below it. Pakistan is the lowest at 0.24, women use the internet at less
+than a quarter of men's rate.
 
+### The three outcomes
 
-Before fitting any model I plot the gap against each outcome. A model will hand me a number whether or not there is anything really there, so I want to look at the data first.
-Each dot is one country: its internet gender gap on the horizontal axis, its GDP per capita on the vertical. I use logged GDP rather than raw dollars here. GDP per capita in my sample runs from about $1,500 to $36,000, and most countries sit near the bottom of that range, so on a raw scale a few rich countries stretch the axis and everyone else bunches into a corner.
-On this scale, 8 is about $3,000 a year, 9 is about $8,000, and 10 is about $22,000 — each step up the axis means roughly 2.7 times richer.
-
-```{r plot-gdp}
-ggplot(data, aes(x = gap_diff, y = log_gdp)) +
-  geom_point(alpha = 0.6) +
-  geom_smooth(method = "lm", se = FALSE, colour = "steelblue") +
-  labs(title = "Wider gaps are found in poorer countries",
-       x = "Internet gender gap (percentage points)",
-       y = "Logged GDP per capita") +
+```{r hist-outcomes}
+ggplot(data, aes(x = gdp_pc_ppp)) +
+  geom_histogram(bins = 20, fill = "steelblue", colour = "white") +
+  labs(title = "GDP per capita, raw dollars",
+       x = "PPP dollars", y = "Countries") +
   theme_minimal()
 
+ggplot(data, aes(x = log_gdp)) +
+  geom_histogram(bins = 20, fill = "steelblue", colour = "white") +
+  labs(title = "GDP per capita, logged",
+       x = "Logged PPP dollars", y = "Countries") +
+  theme_minimal()
+
+ggplot(data, aes(x = flfp)) +
+  geom_histogram(bins = 20, fill = "steelblue", colour = "white") +
+  labs(title = "Female labour force participation",
+       x = "Percent of women aged 15+", y = "Countries") +
+  theme_minimal()
+
+ggplot(data, aes(x = sec_enroll_fem_gross)) +
+  geom_histogram(bins = 20, fill = "steelblue", colour = "white") +
+  labs(title = "Female secondary enrollment",
+       x = "Percent, gross", y = "Countries") +
+  theme_minimal()
 ```
 
-The line slopes down. Countries with wider internet gender gaps tend to be poorer. Something that I was hoping to be the case and the reason that I wanted to explore this data and doing this research and here I get to the point that I cna go to the next level exploration. 
+The first two plots are the same variable before and after logging, and they
+show why I logged it. In raw dollars the countries pile up on the left with a
+long tail of richer ones stretching right. Logged, they spread out roughly
+evenly. That is the transformation doing its job.
+
+### The two controls
+
+```{r hist-controls}
+ggplot(data, aes(x = urban_pct)) +
+  geom_histogram(bins = 20, fill = "steelblue", colour = "white") +
+  labs(title = "Urban population", x = "Percent of total", y = "Countries") +
+  theme_minimal()
+
+
+ggplot(data, aes(x = gender_inequality_index)) +
+  geom_histogram(bins = 20, fill = "steelblue", colour = "white") +
+  labs(title = "Gender Inequality Index",
+       x = "0 to 1, higher is more unequal", y = "Countries") +
+  theme_minimal()
+```
 
