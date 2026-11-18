@@ -253,3 +253,44 @@ ggplot(data, aes(x = gender_inequality_index)) +
   theme_minimal()
 ```
 
+
+
+
+### Prediction: 
+
+
+The thing I am predicting is the outcome. That goes on the left of the ~ in R, and on the vertical axis in a plot. I have three of them: logged GDP per capita, female labour force participation, and female secondary enrollment.
+
+The thing I am predicting with is the internet gender gap. That goes on the right of the ~, and on the horizontal axis.
+
+
+```{r}
+
+lm(flfp ~ gap_diff, data = data)
+
+```
+*Fitting the models, One predictor at a time*
+
+**Logged GDP per capita**
+
+```{r}
+model_gdp <- lm(log_gdp ~ gap_diff, data = data)
+summary(model_gdp)
+confint(model_gdp)
+```
+The slope is −0.039, p = 0.0001, interval from −0.059 to −0.020. The interval does not contain zero.
+
+Because the outcome is logged, that slope means about 4 percent lower GDP per capita for each extra percentage point of gap.
+
+
+
+
+**Female labour force participation**
+```{r}
+model_flfp <- lm(flfp ~ gap_diff, data = data)
+summary(model_flfp)
+confint(model_flfp)
+
+
+```
+The slope is −0.094, p = 0.66, interval from −0.52 to 0.33. That interval contains zero comfortably, so I cannot distinguish this slope from nothing at all.
