@@ -11,7 +11,7 @@
 
 <meta name="author" content="Shukria Alavi" />
 
-<meta name="date" content="2026-11-18" />
+<meta name="date" content="2026-11-19" />
 
 <title>The Internet Gender Gap and Women’s Economic Outcomes</title>
 
@@ -354,7 +354,7 @@ display: none;
 Economic Outcomes</h1>
 <h3 class="subtitle">DS-499 Capstone</h3>
 <h4 class="author">Shukria Alavi</h4>
-<h4 class="date">2026-11-18</h4>
+<h4 class="date">2026-11-19</h4>
 
 </div>
 
@@ -817,6 +817,36 @@ summary(model_flfp)</code></pre>
 <p>The slope is −0.094, p = 0.66, interval from −0.52 to 0.33. That
 interval contains zero comfortably, so I cannot distinguish this slope
 from nothing at all.</p>
+<pre class="r"><code>model_enroll &lt;- lm(sec_enroll_fem_gross ~ gap_diff, data = data)
+summary(model_enroll)</code></pre>
+<pre><code>## 
+## Call:
+## lm(formula = sec_enroll_fem_gross ~ gap_diff, data = data)
+## 
+## Residuals:
+##     Min      1Q  Median      3Q     Max 
+## -61.320 -13.113   6.878  15.655  41.037 
+## 
+## Coefficients:
+##             Estimate Std. Error t value Pr(&gt;|t|)    
+## (Intercept)   85.107      3.094   27.51  &lt; 2e-16 ***
+## gap_diff      -1.207      0.301   -4.01 0.000147 ***
+## ---
+## Signif. codes:  0 &#39;***&#39; 0.001 &#39;**&#39; 0.01 &#39;*&#39; 0.05 &#39;.&#39; 0.1 &#39; &#39; 1
+## 
+## Residual standard error: 22.28 on 72 degrees of freedom
+##   (15 observations deleted due to missingness)
+## Multiple R-squared:  0.1826, Adjusted R-squared:  0.1712 
+## F-statistic: 16.08 on 1 and 72 DF,  p-value: 0.0001465</code></pre>
+<pre class="r"><code>confint(model_enroll)</code></pre>
+<pre><code>##                 2.5 %     97.5 %
+## (Intercept) 78.938803 91.2748856
+## gap_diff    -1.807279 -0.6070889</code></pre>
+<p>The slope is −1.21, p = 0.0001, interval from −1.81 to −0.61. A one
+point wider gap goes with about 1.2 percentage points lower
+enrollment.</p>
+<p>This model uses 74 countries, not 89, because of the missing
+enrollment figures.</p>
 </div>
 </div>
 </div>

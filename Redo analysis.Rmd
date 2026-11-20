@@ -294,3 +294,15 @@ confint(model_flfp)
 
 ```
 The slope is −0.094, p = 0.66, interval from −0.52 to 0.33. That interval contains zero comfortably, so I cannot distinguish this slope from nothing at all.
+
+```{r}
+model_enroll <- lm(sec_enroll_fem_gross ~ gap_diff, data = data)
+summary(model_enroll)
+confint(model_enroll)
+
+```
+The slope is −1.21, p = 0.0001, interval from −1.81 to −0.61. A one point wider gap goes with about 1.2 percentage points lower enrollment.
+
+This model uses 74 countries, not 89, because of the missing enrollment figures.
+
+
