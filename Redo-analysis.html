@@ -11,7 +11,7 @@
 
 <meta name="author" content="Shukria Alavi" />
 
-<meta name="date" content="2026-11-19" />
+<meta name="date" content="2026-11-20" />
 
 <title>The Internet Gender Gap and Women’s Economic Outcomes</title>
 
@@ -354,7 +354,7 @@ display: none;
 Economic Outcomes</h1>
 <h3 class="subtitle">DS-499 Capstone</h3>
 <h4 class="author">Shukria Alavi</h4>
-<h4 class="date">2026-11-19</h4>
+<h4 class="date">2026-11-20</h4>
 
 </div>
 
@@ -814,9 +814,10 @@ summary(model_flfp)</code></pre>
 <pre><code>##                  2.5 %     97.5 %
 ## (Intercept) 46.0039515 54.7776349
 ## gap_diff    -0.5148445  0.3277124</code></pre>
-<p>The slope is −0.094, p = 0.66, interval from −0.52 to 0.33. That
+<p>The slope is −0.094, p = 0.66, interval from −0.51 to 0.32. That
 interval contains zero comfortably, so I cannot distinguish this slope
 from nothing at all.</p>
+<p><strong>Multiple Regression</strong></p>
 <pre class="r"><code>model_enroll &lt;- lm(sec_enroll_fem_gross ~ gap_diff, data = data)
 summary(model_enroll)</code></pre>
 <pre><code>## 
@@ -847,6 +848,33 @@ point wider gap goes with about 1.2 percentage points lower
 enrollment.</p>
 <p>This model uses 74 countries, not 89, because of the missing
 enrollment figures.</p>
+<pre class="r"><code>model_gdp2 &lt;- lm(log_gdp ~ gap_diff + internet_total + urban_pct, data = data)
+summary(model_gdp2)</code></pre>
+<pre><code>## 
+## Call:
+## lm(formula = log_gdp ~ gap_diff + internet_total + urban_pct, 
+##     data = data)
+## 
+## Residuals:
+##      Min       1Q   Median       3Q      Max 
+## -1.48467 -0.24822  0.09277  0.24995  0.85640 
+## 
+## Coefficients:
+##                Estimate Std. Error t value Pr(&gt;|t|)    
+## (Intercept)    7.050511   0.181909  38.758   &lt;2e-16 ***
+## gap_diff       0.005498   0.006077   0.905    0.368    
+## internet_total 0.029999   0.002517  11.918   &lt;2e-16 ***
+## urban_pct      0.001971   0.003074   0.641    0.523    
+## ---
+## Signif. codes:  0 &#39;***&#39; 0.001 &#39;**&#39; 0.01 &#39;*&#39; 0.05 &#39;.&#39; 0.1 &#39; &#39; 1
+## 
+## Residual standard error: 0.4165 on 84 degrees of freedom
+##   (1 observation deleted due to missingness)
+## Multiple R-squared:  0.7669, Adjusted R-squared:  0.7586 
+## F-statistic: 92.13 on 3 and 84 DF,  p-value: &lt; 2.2e-16</code></pre>
+<p>The gap’s slope goes to 0.005, p = 0.37. Indistinguishable from zero.
+Overall internet use absorbed the whole relationship, so that result was
+about development, not gender.</p>
 </div>
 </div>
 </div>
